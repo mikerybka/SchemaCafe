@@ -30,11 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.lifecycle.lifecycleScope
 import com.mikerybka.schemacafe.ui.theme.SchemaCafeTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.map
 
 private val ComponentActivity.dataStore by preferencesDataStore(name = "settings")
 
@@ -52,18 +50,18 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>) {
-    var githubTokenKey = stringPreferencesKey("github_token")
+
     val scope = rememberCoroutineScope()
     var savedToken by remember { mutableStateOf<String?>(null) }
     var inputToken by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         val prefs = dataStore.data.first()
-        savedToken = prefs[githubTokenKey]
+        savedToken = prefs[stringPreferencesKey("github_token")]
     }
 
     if (savedToken != null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Saved value: ${savedToken!!}")
         }
     } else {
@@ -73,7 +71,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                 Button(onClick = {
                     scope.launch {
                         dataStore.edit { prefs ->
-                            prefs[githubTokenKey] = inputToken
+                            prefs[stringPreferencesKey("github_token")] = inputToken
                         }
                         savedToken = inputToken
                     }
