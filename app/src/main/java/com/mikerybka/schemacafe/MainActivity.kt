@@ -1,6 +1,7 @@
 package com.mikerybka.schemacafe
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,12 +40,14 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -57,6 +60,11 @@ import androidx.navigation.navArgument
 import com.mikerybka.schemacafe.ui.theme.SchemaCafeTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import org.json.JSONArray
 
 private val ComponentActivity.dataStore by preferencesDataStore(name = "settings")
 
@@ -84,7 +92,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
-    val schemaIDs = remember { mutableListOf<String>()}
+    var schemaIDs = remember { mutableStateListOf<String>()}
 
     LaunchedEffect(Unit) {
         val prefs = dataStore.data.first()
@@ -150,22 +158,6 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                         style = MaterialTheme.typography.titleLarge
                     )
                     NavigationDrawerItem(
-                        label = { Text("Home") },
-                        selected = false,
-                        onClick = {
-                            navController.navigate("home")
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    NavigationDrawerItem(
-                        label = { Text("Settings") },
-                        selected = false,
-                        onClick = {
-                            navController.navigate("settings")
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                    NavigationDrawerItem(
                         label = { Text("Logout")},
                         selected = false,
                         onClick = {
@@ -194,7 +186,27 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                         },
                         actions = {
                             IconButton(onClick = {
-
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    val request = Request.Builder()
+                                        .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
+                                        .header("Authorization", "token $savedToken")
+                                        .header("Accept", "application/vnd.github.v3+json")
+                                        .build()
+                                    OkHttpClient().newCall(request).execute().use { response ->
+                                        val body = response.body?.string() ?: ""
+                                        if (!response.isSuccessful) {
+                                            println("Request failed: ${response.code}")
+                                            println(body)
+                                            return@use
+                                        }
+                                        val jsonArray = JSONArray(body)
+                                        for (i in 0 until jsonArray.length()) {
+                                            val file = jsonArray.getJSONObject(i)
+                                            println(file.getString("name") + " (${file.getString("type")})")
+                                            schemaIDs.add(file.getString("name"))
+                                        }
+                                    }
+                                }
                             }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
@@ -228,25 +240,13 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                         route = "schemas/{schemaID}",
                         arguments = listOf(navArgument("schemaID") { type = NavType.StringType })
                     ) {
-                        SchemaScreen()
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Schema View")
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun SchemaListScreen() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Home Screen")
-    }
-}
-
-@Composable
-fun SchemaScreen() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Settings Screen")
     }
 }
 
