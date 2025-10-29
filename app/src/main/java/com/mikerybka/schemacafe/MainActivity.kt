@@ -94,7 +94,6 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>) {
-
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf((true)) }
     var savedToken by remember { mutableStateOf<String?>(null) }
@@ -103,7 +102,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
-    var schemaIDs = remember { mutableStateListOf<String>()}
+    var schemaIDsJSON by remember { mutableStateOf("[]") }
 
     LaunchedEffect(Unit) {
         val prefs = dataStore.data.first()
@@ -116,7 +115,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
             Text("Loading...")
         }
     } else if (savedToken == null) {
-        Scaffold(
+        return Scaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding(),
@@ -169,7 +168,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                             textDecoration = TextDecoration.Underline
                                         )
                                     ) {
-                                        append("Create a new one")
+                                        append("Create a new access token")
                                     }
                                 }
                             },
@@ -181,7 +180,13 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
             }
         }
     } else {
-        ModalNavigationDrawer(
+        val schemaIDs = mutableListOf<String>()
+        val arr = JSONArray(schemaIDsJSON)
+        for (i in 0 until arr.length()) {
+            val file = arr.getJSONObject(i)
+            schemaIDs.add(file.getString("name"))
+        }
+        return ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet {
@@ -226,18 +231,12 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                         .header("Accept", "application/vnd.github.v3+json")
                                         .build()
                                     OkHttpClient().newCall(request).execute().use { response ->
-                                        val body = response.body?.string() ?: ""
                                         if (!response.isSuccessful) {
+                                            // TODO let the user know the request failed
                                             println("Request failed: ${response.code}")
-                                            println(body)
                                             return@use
                                         }
-                                        val jsonArray = JSONArray(body)
-                                        for (i in 0 until jsonArray.length()) {
-                                            val file = jsonArray.getJSONObject(i)
-                                            println(file.getString("name") + " (${file.getString("type")})")
-                                            schemaIDs.add(file.getString("name"))
-                                        }
+                                        schemaIDsJSON = response.body?.string() ?: "[]"
                                     }
                                 }
                             }) {
@@ -282,4 +281,3 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
         }
     }
 }
-
