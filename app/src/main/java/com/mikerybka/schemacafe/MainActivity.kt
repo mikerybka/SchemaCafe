@@ -184,7 +184,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
         val arr = JSONArray(schemaIDsJSON)
         for (i in 0 until arr.length()) {
             val file = arr.getJSONObject(i)
-            schemaIDs.add(file.getString("name"))
+            schemaIDs.add(file.getString("name").removeSuffix(".json"))
         }
         return ModalNavigationDrawer(
             drawerState = drawerState,
