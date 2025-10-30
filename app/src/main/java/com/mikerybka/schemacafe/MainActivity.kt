@@ -109,6 +109,23 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
     LaunchedEffect(Unit) {
         val prefs = dataStore.data.first()
         savedToken = prefs[stringPreferencesKey("github_token")]
+        if (savedToken != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                val request = Request.Builder()
+                    .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
+                    .header("Authorization", "token $savedToken")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                OkHttpClient().newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        // TODO let the user know the request failed
+                        println("Request failed: ${response.code}")
+                        return@use
+                    }
+                    schemaIDsJSON = response.body?.string() ?: "[]"
+                }
+            }
+        }
         loading = false
     }
 
