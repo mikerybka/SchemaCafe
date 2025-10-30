@@ -22,12 +22,14 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -211,49 +213,59 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                 }
             }
         ) {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("Schemas") },
-                        navigationIcon = {
-                            IconButton(onClick = {
-                                scope.launch { drawerState.open() }
-                            }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Settings")
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    val request = Request.Builder()
-                                        .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
-                                        .header("Authorization", "token $savedToken")
-                                        .header("Accept", "application/vnd.github.v3+json")
-                                        .build()
-                                    OkHttpClient().newCall(request).execute().use { response ->
-                                        if (!response.isSuccessful) {
-                                            // TODO let the user know the request failed
-                                            println("Request failed: ${response.code}")
-                                            return@use
+            NavHost(
+                navController = navController,
+                startDestination = "schemas",
+                modifier =  Modifier.fillMaxSize()
+            ) {
+                composable("schemas") {
+                    Scaffold(
+                        topBar = {
+                            TopAppBar(
+                                title = { Text("Schemas") },
+                                navigationIcon = {
+                                    IconButton(onClick = {
+                                        scope.launch { drawerState.open() }
+                                    }) {
+                                        Icon(Icons.Default.Menu, contentDescription = "Settings")
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            val request = Request.Builder()
+                                                .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
+                                                .header("Authorization", "token $savedToken")
+                                                .header("Accept", "application/vnd.github.v3+json")
+                                                .build()
+                                            OkHttpClient().newCall(request).execute().use { response ->
+                                                if (!response.isSuccessful) {
+                                                    // TODO let the user know the request failed
+                                                    println("Request failed: ${response.code}")
+                                                    return@use
+                                                }
+                                                schemaIDsJSON = response.body?.string() ?: "[]"
+                                            }
                                         }
-                                        schemaIDsJSON = response.body?.string() ?: "[]"
+                                    }) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                                     }
                                 }
-                            }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            )
+                        },
+                        floatingActionButton = {
+                            FloatingActionButton(
+                                onClick = { /* handle click here */ }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add"
+                                )
                             }
                         }
-                    )
-                }
-            ) { innerPadding ->
-                NavHost(
-                    navController = navController,
-                    startDestination = "schemas",
-                    modifier = Modifier.padding(innerPadding)
-                ) {
-                    composable("schemas") {
+                    ) { innerPadding ->
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.padding(innerPadding),
                             contentPadding = PaddingValues(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -268,11 +280,13 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                             }
                         }
                     }
-                    composable(
-                        route = "schemas/{schemaID}",
-                        arguments = listOf(navArgument("schemaID") { type = NavType.StringType })
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                }
+                composable(
+                    route = "schemas/{schemaID}",
+                    arguments = listOf(navArgument("schemaID") { type = NavType.StringType })
+                ) {
+                    Scaffold { innerPadding ->
+                        Box(Modifier.padding(innerPadding), contentAlignment = Alignment.Center) {
                             Text("Schema View")
                         }
                     }
@@ -281,3 +295,4 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
         }
     }
 }
+
