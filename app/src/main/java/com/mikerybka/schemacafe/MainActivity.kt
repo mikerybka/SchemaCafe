@@ -22,7 +22,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -290,6 +292,9 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .clickable {
+                                            navController.navigate("schemas/test")
+                                        }
                                         .padding(16.dp)
                                 ) {
                                     Text(id)
@@ -302,7 +307,21 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                     route = "schemas/{schemaID}",
                     arguments = listOf(navArgument("schemaID") { type = NavType.StringType })
                 ) {
-                    Scaffold { innerPadding ->
+                    Scaffold(
+                        topBar = {
+                            TopAppBar(
+                                title = { Text("Detail") },
+                                navigationIcon = {
+                                    IconButton(onClick = { navController.navigateUp() }) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back"
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    ) { innerPadding ->
                         Box(Modifier.padding(innerPadding), contentAlignment = Alignment.Center) {
                             Text("Schema View")
                         }
