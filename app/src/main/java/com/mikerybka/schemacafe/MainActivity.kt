@@ -115,6 +115,11 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
     var showAddSheet by remember { mutableStateOf(false) }
     val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var newSchemaName by remember { mutableStateOf("") }
+    val newSchemaID = newSchemaName
+        .lowercase()                       // 1. make lowercase
+        .replace(Regex("[^a-z0-9\\s]"), "") // 2. remove non-alphanumeric (except spaces)
+        .trim()                             // 3. remove leading/trailing spaces
+        .replace(Regex("\\s+"), "-")        // 4. replace 1+ spaces with one dash
     var addSchemaError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -325,6 +330,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Text("Add Schema", style = MaterialTheme.typography.titleMedium)
+                                    Text("ID: $newSchemaID")
                                     TextField(
                                         value = newSchemaName,
                                         onValueChange = {
@@ -353,10 +359,16 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                             Text("Cancel")
                                         }
                                         TextButton(onClick = {
+
                                             when {
-                                                newSchemaName.isBlank() ->
-                                                    addSchemaError = "Name cannot be empty"
+                                                newSchemaID.isBlank() ->
+                                                    addSchemaError = "ID cannot be empty"
+                                                schemaIDs.contains(newSchemaID) ->
+                                                    addSchemaError = "ID already in use"
                                                 else -> {
+                                                    CoroutineScope(Dispatchers.IO).launch {
+
+                                                    }
                                                     newSchemaName = ""
                                                     addSchemaError = null
                                                     showAddSheet = false
