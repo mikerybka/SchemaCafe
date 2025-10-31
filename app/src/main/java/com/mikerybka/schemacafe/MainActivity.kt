@@ -35,14 +35,18 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -107,6 +111,11 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     var schemaIDsJSON by remember { mutableStateOf("[]") }
+
+    var showAddSheet by remember { mutableStateOf(false) }
+    val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var newSchemaName by remember { mutableStateOf("") }
+    var addSchemaError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val prefs = dataStore.data.first()
@@ -274,7 +283,9 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                         },
                         floatingActionButton = {
                             FloatingActionButton(
-                                onClick = { /* handle click here */ }
+                                onClick = {
+                                    showAddSheet = true
+                                }
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
@@ -298,6 +309,63 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                         .padding(16.dp)
                                 ) {
                                     Text(id)
+                                }
+                            }
+                        }
+
+                        if (showAddSheet) {
+                            ModalBottomSheet(
+                                onDismissRequest = { showAddSheet = false },
+                                sheetState = addSheetState
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(16.dp)
+                                        .fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text("Add Schema", style = MaterialTheme.typography.titleMedium)
+                                    TextField(
+                                        value = newSchemaName,
+                                        onValueChange = {
+                                            newSchemaName = it
+                                            addSchemaError = null
+                                        },
+                                        label = { Text("Name") },
+                                        isError = addSchemaError != null,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    if (addSchemaError != null) {
+                                        Text(
+                                            text = addSchemaError ?: "",
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.End,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        TextButton(onClick = {
+                                            newSchemaName = ""
+                                            showAddSheet = false
+                                        }) {
+                                            Text("Cancel")
+                                        }
+                                        TextButton(onClick = {
+                                            when {
+                                                newSchemaName.isBlank() ->
+                                                    addSchemaError = "Name cannot be empty"
+                                                else -> {
+                                                    newSchemaName = ""
+                                                    addSchemaError = null
+                                                    showAddSheet = false
+                                                }
+                                            }
+                                        }) {
+                                            Text("Add")
+                                        }
+                                    }
                                 }
                             }
                         }
