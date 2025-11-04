@@ -19,12 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -50,7 +48,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,8 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -80,10 +76,17 @@ import com.mikerybka.schemacafe.ui.theme.SchemaCafeTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.*
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 private val ComponentActivity.dataStore by preferencesDataStore(name = "settings")
 
@@ -98,10 +101,66 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+@OptIn(ExperimentalEncodingApi::class)
+fun updateGithubFile(
+    token: String,
+    owner: String,
+    repo: String,
+    path: String,
+    newContent: String,
+    commitMessage: String
+): Result<Unit> {
+    val client = OkHttpClient()
+
+    return try {
+        val getRequest = Request.Builder()
+            .url("https://api.github.com/repos/$owner/$repo/contents/$path")
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/vnd.github.v3+json")
+            .build()
+
+        client.newCall(getRequest).execute().use { getResponse ->
+            if (!getResponse.isSuccessful) {
+                return Result.failure(IOException("Failed to get file: ${getResponse.code}"))
+            }
+
+            val bodyString = getResponse.body?.string() ?: ""
+            val sha = JSONObject(bodyString).getString("sha")
+            val encodedContent = Base64.encode(newContent.toByteArray())
+
+            val jsonBody = JSONObject().apply {
+                put("message", commitMessage)
+                put("content", encodedContent)
+                put("sha", sha)
+            }
+
+            val requestBody = jsonBody.toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+
+            val putRequest = Request.Builder()
+                .url("https://api.github.com/repos/$owner/$repo/contents/$path")
+                .header("Authorization", "Bearer $token")
+                .header("Accept", "application/vnd.github.v3+json")
+                .put(requestBody)
+                .build()
+
+            client.newCall(putRequest).execute().use { putResponse ->
+                if (!putResponse.isSuccessful) {
+                    return Result.failure(IOException("Failed to update file: ${putResponse.code}"))
+                }
+            }
+        }
+
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf((true)) }
     var savedToken by remember { mutableStateOf<String?>(null) }
@@ -122,26 +181,71 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
         .replace(Regex("\\s+"), "-")        // 4. replace 1+ spaces with one dash
     var addSchemaError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        val prefs = dataStore.data.first()
-        savedToken = prefs[stringPreferencesKey("github_token")]
-        if (savedToken != null) {
-            CoroutineScope(Dispatchers.IO).launch {
-                val request = Request.Builder()
-                    .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
-                    .header("Authorization", "token $savedToken")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .build()
+    var schemas by remember { mutableStateMapOf<String, String>() }
+
+    fun loadSchemaList() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val request = Request.Builder()
+                .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
+                .header("Authorization", "token $savedToken")
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+            try {
                 OkHttpClient().newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        // TODO let the user know the request failed
-                        println("Request failed: ${response.code}")
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(
+                                context,
+                                "Request failed: ${response.code}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                         return@use
                     }
                     schemaIDsJSON = response.body?.string() ?: "[]"
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Reloaded",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            } catch (e: UnknownHostException) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "No internet connection",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: SocketTimeoutException) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "Request timed out",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: IOException) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "Network error: ${e.localizedMessage}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
+    }
+
+    fun loadSchema(id: String) {
+
+    }
+
+    LaunchedEffect(Unit) {
+        val prefs = dataStore.data.first()
+        savedToken = prefs[stringPreferencesKey("github_token")]
         loading = false
     }
 
@@ -215,6 +319,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
             }
         }
     } else {
+
         val schemaIDs = mutableListOf<String>()
         val arr = JSONArray(schemaIDsJSON)
         for (i in 0 until arr.length()) {
@@ -252,6 +357,9 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                 modifier =  Modifier.fillMaxSize()
             ) {
                 composable("schemas") {
+                    LaunchedEffect(Unit) {
+                        loadSchemaList()
+                    }
                     Scaffold(
                         topBar = {
                             TopAppBar(
@@ -265,21 +373,7 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
                                 },
                                 actions = {
                                     IconButton(onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            val request = Request.Builder()
-                                                .url("https://api.github.com/repos/mikerybka/data/contents/schemas")
-                                                .header("Authorization", "token $savedToken")
-                                                .header("Accept", "application/vnd.github.v3+json")
-                                                .build()
-                                            OkHttpClient().newCall(request).execute().use { response ->
-                                                if (!response.isSuccessful) {
-                                                    // TODO let the user know the request failed
-                                                    println("Request failed: ${response.code}")
-                                                    return@use
-                                                }
-                                                schemaIDsJSON = response.body?.string() ?: "[]"
-                                            }
-                                        }
+                                        loadSchemaList()
                                     }) {
                                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                                     }
