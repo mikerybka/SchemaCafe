@@ -183,6 +183,72 @@ fun App(dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferen
 
     var schemas by remember { mutableStateMapOf<String, String>() }
 
+    val owner = "mikerybka"
+    val repo = "data"
+    val branch = "main"
+
+    var folders: MutableMap<String, ByteArray> by remember { mutableStateMapOf() }
+    var files: MutableMap<String, ByteArray> by remember { mutableStateMapOf() }
+
+    fun fetchFolder(path: String) {
+        scope.launch(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("https://api.github.com/repos/$owner/$repo/contents/$path?ref=$branch")
+                .header("Authorization", "token $savedToken")
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+
+            try {
+                OkHttpClient().newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw Exception("${response.code}: ${response.body}")
+                    }
+                    val bytes = response.body?.bytes() ?: ByteArray(0)
+                    withContext(Dispatchers.Main) {
+                        folders[path] = bytes
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        e.message,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    fun fetchFile(path: String) {
+        scope.launch(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("https://raw.githubusercontent.com/$owner/$repo/$branch/contents/$path")
+                .header("Authorization", "token $savedToken")
+                .build()
+
+            try {
+                OkHttpClient().newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw Exception("${response.code}: ${response.body}")
+                    }
+                    val bytes = response.body?.bytes() ?: ByteArray(0)
+                    withContext(Dispatchers.Main) {
+                        files[path] = bytes
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        e.message,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
     fun loadSchemaList() {
         CoroutineScope(Dispatchers.IO).launch {
             val request = Request.Builder()
